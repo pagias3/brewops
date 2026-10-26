@@ -69,6 +69,37 @@ def test_machine_health_unknown_machine(conn):
     assert get_machine_health(conn, 999) is None
 
 
+def test_specialty_is_most_brewed_with_label(conn):
+    insert_brew(conn, 1, "hot_water", "2026-06-01 08:00:00", 10.0, 95.0, "csv")
+    insert_brew(conn, 1, "hot_water", "2026-06-01 09:00:00", 10.0, 95.0, "csv")
+    insert_brew(conn, 1, "latte", "2026-06-02 09:00:00", 40.0, 88.0, "csv")
+    insert_brew(conn, 2, "espresso", "2026-06-05 09:00:00", 27.0, 92.0, "csv")
+    conn.commit()
+
+    assert get_machine_health(conn, 1)["specialty"] == {
+        "name": "hot_water", "label": "Hot water", "count": 2,
+    }
+    # counted per machine
+    assert get_machine_health(conn, 2)["specialty"]["name"] == "espresso"
+
+
+def test_specialty_tie_goes_to_most_recent(conn):
+    insert_brew(conn, 1, "espresso", "2026-06-01 08:00:00", 27.0, 92.0, "csv")
+    insert_brew(conn, 1, "latte", "2026-06-02 08:00:00", 40.0, 88.0, "csv")
+    conn.commit()
+    assert get_machine_health(conn, 1)["specialty"]["name"] == "latte"
+
+    insert_brew(conn, 1, "espresso", "2026-06-03 08:00:00", 27.0, 92.0, "csv")
+    insert_brew(conn, 1, "latte", "2026-06-03 08:00:00", 40.0, 88.0, "csv")
+    conn.commit()
+    # tied on count and timestamp: lowest drink id (espresso) wins
+    assert get_machine_health(conn, 1)["specialty"]["name"] == "espresso"
+
+
+def test_specialty_none_without_brews(conn):
+    assert get_machine_health(conn, 4)["specialty"] is None
+
+
 def test_reset_db_clears_events(conn):
     insert_brew(conn, 1, "espresso", "2026-06-01 08:00:00", 27.0, 92.0, "csv")
     conn.commit()

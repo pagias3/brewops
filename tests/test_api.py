@@ -46,7 +46,8 @@ def test_machines_list_and_health(db):
     health = r.json()
     assert health["brew_count"] == 2
     assert health["last_maintenance"]["type"] == "descale"
-
+    assert health["specialty"] == {"name": "espresso", "label": "Espresso", "count": 2}
+    assert request(app, "GET", "/api/machines/4").json()["specialty"] is None
 
 def test_machine_health_404(db):
     r = request(app, "GET", "/api/machines/999")

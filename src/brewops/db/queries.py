@@ -106,6 +106,19 @@ def get_machine_health(conn: sqlite3.Connection, machine_id: int) -> dict[str, A
         """,
         (machine_id,),
     ).fetchone()
+    # Most-brewed drink; ties go to the most recently brewed, then the lowest drink id.
+    specialty = conn.execute(
+        """
+        SELECT dt.name, dt.label, COUNT(*) AS count
+        FROM brew_events be
+        JOIN drink_types dt ON dt.name = be.drink_type
+        WHERE be.machine_id = ?
+        GROUP BY dt.id
+        ORDER BY COUNT(*) DESC, MAX(be.timestamp) DESC, dt.id ASC
+        LIMIT 1
+        """,
+        (machine_id,),
+    ).fetchone()
     last_maintenance = conn.execute(
         """
         SELECT type, timestamp, note, error_code
@@ -130,6 +143,7 @@ def get_machine_health(conn: sqlite3.Connection, machine_id: int) -> dict[str, A
     return machine | {
         "brew_count": brews["count"],
         "last_brew": brews["last_brew"],
+        "specialty": dict(specialty) if specialty else None,
         "last_maintenance": dict(last_maintenance) if last_maintenance else None,
         "recent_errors": recent_errors,
     }
