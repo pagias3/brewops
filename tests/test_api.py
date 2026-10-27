@@ -119,3 +119,55 @@ def test_post_maintenance(db):
         "timestamp": "2026-06-06 09:00:00",
     })
     assert r.status == 400
+
+
+def test_stats_with_date_range(db):
+    r = request(app, "GET", "/api/stats?from=2026-06-02&to=2026-06-02")
+    assert r.status == 200
+    stats = r.json()
+    assert stats["total_brews"] == 1
+    assert {"2026-06-02": 1} == {d["day"]: d["count"] for d in stats["per_day"]}
+
+
+def test_stats_from_only(db):
+    r = request(app, "GET", "/api/stats?from=2026-06-03")
+    assert r.status == 200
+    assert r.json()["total_brews"] == 0
+
+
+def test_stats_date_range_backwards_is_400(db):
+    r = request(app, "GET", "/api/stats?from=2026-06-05&to=2026-06-01")
+    assert r.status == 400
+    assert "'from' must not be after 'to'" in r.json()["detail"]
+
+
+def test_stats_malformed_date_is_400(db):
+    r = request(app, "GET", "/api/stats?from=nope")
+    assert r.status == 400
+    assert "invalid date" in r.json()["detail"]
+
+
+def test_stats_empty_param_is_ok(db):
+    r = request(app, "GET", "/api/stats?from=")
+    assert r.status == 200
+    assert r.json()["total_brews"] == 3
+
+
+def test_machine_health_with_range(db):
+    r = request(app, "GET", "/api/machines/1?from=2026-06-02")
+    assert r.status == 200
+    assert r.json()["brew_count"] == 0
+
+    r = request(app, "GET", "/api/machines/1")
+    assert r.status == 200
+    assert r.json()["brew_count"] == 2
+
+
+def test_machine_health_404_with_valid_range(db):
+    r = request(app, "GET", "/api/machines/999?from=2026-06-01")
+    assert r.status == 404
+
+
+def test_machine_health_400_on_bad_date_for_any_machine(db):
+    r = request(app, "GET", "/api/machines/1?from=invalid-date")
+    assert r.status == 400

@@ -15,10 +15,19 @@
   <main>
     <!-- Zone 1: dashboard -->
     <section id="dashboard">
+      <div class="filter-bar" id="date-filter">
+        <label for="filter-from">From</label>
+        <input type="date" id="filter-from">
+        <label for="filter-to">To</label>
+        <input type="date" id="filter-to">
+        <button type="button" id="filter-clear">All time</button>
+        <p id="filter-message" class="message" role="status"></p>
+      </div>
+
       <div class="stat-tiles">
         <div class="tile">
           <span class="tile-number" id="total-brews">–</span>
-          <span class="tile-label">brews total</span>
+          <span class="tile-label" id="total-brews-label">brews total</span>
         </div>
         <div class="tile">
           <span class="tile-number" id="brews-today">–</span>
@@ -39,6 +48,7 @@
         <h2>Brews over time</h2>
         <svg id="timeline" viewBox="0 0 600 130" preserveAspectRatio="none" role="img"
              aria-label="Brews per day"></svg>
+        <p id="timeline-empty" class="hint" hidden>No brews in this range</p>
       </div>
 
       <div class="panel">

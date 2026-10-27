@@ -1,7 +1,34 @@
 """Read and write queries. All timestamps are naive local time strings."""
 
 import sqlite3
+from datetime import datetime, timedelta
 from typing import Any
+
+
+def _range_bounds(date_from: str | None, date_to: str | None) -> tuple[str | None, str | None]:
+    """Turn inclusive 'YYYY-MM-DD' dates into a half-open [start, end) timestamp range.
+    Either side may be None (unbounded)."""
+    start = f"{date_from} 00:00:00" if date_from else None
+    end = None
+    if date_to:
+        next_day = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+        end = next_day.strftime("%Y-%m-%d 00:00:00")
+    return start, end
+
+
+def _range_conditions(
+    column: str, date_from: str | None, date_to: str | None
+) -> tuple[list[str], list[str]]:
+    """Build SQL WHERE conditions for a date range. Returns (conditions, params)."""
+    start, end = _range_bounds(date_from, date_to)
+    conds, params = [], []
+    if start:
+        conds.append(f"{column} >= ?")
+        params.append(start)
+    if end:
+        conds.append(f"{column} < ?")
+        params.append(end)
+    return conds, params
 
 
 def get_machines(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -65,60 +92,92 @@ def insert_maintenance(
     return cur.lastrowid
 
 
-def get_stats(conn: sqlite3.Connection) -> dict[str, Any]:
+def get_stats(
+    conn: sqlite3.Connection, date_from: str | None = None, date_to: str | None = None
+) -> dict[str, Any]:
     """Dashboard numbers: totals, per-drink, per-day."""
-    total = conn.execute("SELECT COUNT(*) AS n FROM brew_events").fetchone()["n"]
+    conds, params = _range_conditions("timestamp", date_from, date_to)
+    where_clause = f"WHERE {' AND '.join(conds)}" if conds else ""
+
+    total = conn.execute(
+        f"SELECT COUNT(*) AS n FROM brew_events {where_clause}", params
+    ).fetchone()["n"]
+
+    # For per_drink, put range conditions in the ON clause to preserve drinks with zero count
+    on_clause = ""
+    if conds:
+        be_conds = [f"be.{c}" for c in conds]
+        on_clause = f"AND {' AND '.join(be_conds)}"
+
     per_drink = [
         dict(r)
         for r in conn.execute(
-            """
+            f"""
             SELECT dt.name, dt.label, COUNT(be.id) AS count
             FROM drink_types dt
-            LEFT JOIN brew_events be ON be.drink_type = dt.name
+            LEFT JOIN brew_events be ON be.drink_type = dt.name {on_clause}
             GROUP BY dt.id
             ORDER BY dt.id
-            """
+            """,
+            params,
         )
     ]
+
     per_day = [
         dict(r)
         for r in conn.execute(
-            """
+            f"""
             SELECT DATE(timestamp) AS day, COUNT(*) AS count
             FROM brew_events
+            {where_clause}
             GROUP BY DATE(timestamp)
             ORDER BY day
-            """
+            """,
+            params,
         )
     ]
     return {"total_brews": total, "per_drink": per_drink, "per_day": per_day}
 
 
-def get_machine_health(conn: sqlite3.Connection, machine_id: int) -> dict[str, Any] | None:
+def get_machine_health(
+    conn: sqlite3.Connection, machine_id: int, date_from: str | None = None, date_to: str | None = None
+) -> dict[str, Any] | None:
     """Machine card: brew activity plus maintenance history."""
     machine = get_machine(conn, machine_id)
     if machine is None:
         return None
+
+    conds, params = _range_conditions("be.timestamp", date_from, date_to)
+    where_clause = f"WHERE be.machine_id = ? {f'AND {" AND ".join(conds)}' if conds else ''}"
+    brew_params = [machine_id] + params
+
     brews = conn.execute(
-        """
-        SELECT COUNT(*) AS count, MAX(timestamp) AS last_brew
-        FROM brew_events WHERE machine_id = ?
+        f"""
+        SELECT COUNT(*) AS count, MAX(be.timestamp) AS last_brew
+        FROM brew_events be
+        {where_clause}
         """,
-        (machine_id,),
+        brew_params,
     ).fetchone()
+
     # Most-brewed drink; ties go to the most recently brewed, then the lowest drink id.
+    specialty_conds, specialty_params = _range_conditions("be.timestamp", date_from, date_to)
+    specialty_where = f"WHERE be.machine_id = ? {f'AND {" AND ".join(specialty_conds)}' if specialty_conds else ''}"
+    specialty_brew_params = [machine_id] + specialty_params
+
     specialty = conn.execute(
-        """
+        f"""
         SELECT dt.name, dt.label, COUNT(*) AS count
         FROM brew_events be
         JOIN drink_types dt ON dt.name = be.drink_type
-        WHERE be.machine_id = ?
+        {specialty_where}
         GROUP BY dt.id
         ORDER BY COUNT(*) DESC, MAX(be.timestamp) DESC, dt.id ASC
         LIMIT 1
         """,
-        (machine_id,),
+        specialty_brew_params,
     ).fetchone()
+
     last_maintenance = conn.execute(
         """
         SELECT type, timestamp, note, error_code

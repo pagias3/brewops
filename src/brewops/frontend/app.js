@@ -9,7 +9,32 @@ async function fetchJSON(url, options) {
   return response.json();
 }
 
+// ---- date filter helpers ----
+
+function rangeQuery() {
+  const from = document.getElementById("filter-from").value;
+  const to = document.getElementById("filter-to").value;
+  const params = new URLSearchParams();
+  if (from) params.append("from", from);
+  if (to) params.append("to", to);
+  const qs = params.toString();
+  return qs ? "?" + qs : "";
+}
+
+function hasRange() {
+  return !!document.getElementById("filter-from").value || !!document.getElementById("filter-to").value;
+}
+
+function showFilterMessage(text) {
+  const msg = document.getElementById("filter-message");
+  msg.textContent = text;
+  msg.className = "message";
+  if (text) msg.classList.add("error");
+}
+
 // ---- dashboard ----
+
+let loadSeq = 0;
 
 function renderDrinkBars(perDrink) {
   const container = document.getElementById("drink-bars");
@@ -29,6 +54,7 @@ function renderDrinkBars(perDrink) {
 function renderTimeline(perDay) {
   const svg = document.getElementById("timeline");
   svg.innerHTML = "";
+  document.getElementById("timeline-empty").hidden = perDay.length > 0;
   if (perDay.length === 0) return;
   const width = 600;
   const height = 130;
@@ -78,17 +104,37 @@ function renderMachineCards(healths) {
 }
 
 async function loadDashboard() {
-  const stats = await fetchJSON("/api/stats");
+  const seq = ++loadSeq;
+  const query = rangeQuery();
+
+  const stats = await fetchJSON("/api/stats" + query);
+  if (seq !== loadSeq) return;
+
   document.getElementById("total-brews").textContent = stats.total_brews;
+  document.getElementById("total-brews-label").textContent = hasRange() ? "brews in range" : "brews total";
+
   const lastDay = stats.per_day[stats.per_day.length - 1];
   document.getElementById("brews-today").textContent = lastDay ? lastDay.count : 0;
   renderDrinkBars(stats.per_drink);
   renderTimeline(stats.per_day);
 
   const machines = await fetchJSON("/api/machines");
+  if (seq !== loadSeq) return;
+
   document.getElementById("machine-count").textContent = machines.length;
-  const healths = await Promise.all(machines.map((m) => fetchJSON(`/api/machines/${m.id}`)));
+  const healths = await Promise.all(machines.map((m) => fetchJSON(`/api/machines/${m.id}${query}`)));
+  if (seq !== loadSeq) return;
+
   renderMachineCards(healths);
+  showFilterMessage("");
+}
+
+async function reloadFromFilter() {
+  try {
+    await loadDashboard();
+  } catch (error) {
+    showFilterMessage(error.message);
+  }
 }
 
 // ---- forms ----
@@ -156,8 +202,32 @@ async function submitForm(event, url, messageId, buildPayload) {
   }
 }
 
+function setupFilter() {
+  const inputs = [document.getElementById("filter-from"), document.getElementById("filter-to")];
+  inputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      const from = document.getElementById("filter-from").value;
+      const to = document.getElementById("filter-to").value;
+      if (from && to && from > to) {
+        showFilterMessage("'From' must not be after 'To'");
+        return;
+      }
+      reloadFromFilter();
+    });
+  });
+
+  document.getElementById("filter-clear").addEventListener("click", () => {
+    document.getElementById("filter-from").value = "";
+    document.getElementById("filter-to").value = "";
+    showFilterMessage("");
+    reloadFromFilter();
+  });
+}
+
 loadDashboard().catch((error) => {
   document.getElementById("total-brews").textContent = "!";
   console.error("Dashboard failed to load:", error);
 });
 setupForms().catch((error) => console.error("Form setup failed:", error));
+setupFilter();
+

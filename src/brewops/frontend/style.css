@@ -114,29 +114,107 @@ main {
   gap: 1.35rem;
 }
 
+/* Filter bar spans the full width */
+.filter-bar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.filter-bar label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.filter-bar input[type="date"] {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.filter-bar input[type="date"]:focus {
+  outline: none;
+  border-color: var(--brass);
+  box-shadow: 0 0 0 3px rgb(185 129 47 / 0.22);
+}
+
+.filter-bar button {
+  padding: 0.65rem 1.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.filter-bar button:hover {
+  filter: brightness(0.96);
+  box-shadow: var(--shadow);
+}
+
+.filter-bar button:active {
+  transform: translateY(1px);
+}
+
+.filter-bar button:focus-visible {
+  outline: 3px solid rgb(185 129 47 / 0.5);
+  outline-offset: 2px;
+}
+
+.filter-bar #filter-message {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.filter-bar #filter-message.error {
+  color: var(--warn);
+}
+
 /* KPI band across the top */
 .stat-tiles {
   grid-column: 1 / -1;
-  grid-row: 1;
+  grid-row: 2;
 }
 
 /* hero row: wide trend chart + a narrower breakdown beside it */
 #dashboard > .panel:has(#timeline) {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 3;
   display: flex;
   flex-direction: column;
 }
 
 #dashboard > .panel:has(#drink-bars) {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 3;
 }
 
 /* fleet gallery spans full width below the hero row */
 #dashboard > .panel:has(#machine-cards) {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 4;
 }
 
 /* the two logging forms sit side by side under the dashboard */
@@ -300,6 +378,10 @@ main {
   min-height: 190px;
   display: block;
   overflow: visible;
+}
+
+#timeline-empty {
+  text-align: center;
 }
 
 .timeline-bar {
